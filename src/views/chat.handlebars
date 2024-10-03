@@ -1,33 +1,92 @@
+<link rel="stylesheet" href=" https://cdn.jsdelivr.net/npm/sweetalert2@11.14.1/dist/sweetalert2.min.css">
+
 <div>
-    <h2>Ejemplo de cliente Socket.IO</h2>
+    <h2>Ejemplo de cliente con Socket.IO</h2>
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
-{{!-- <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.8.0/build/cjs/index.min.js"></script> --}}
+<div style="margin-top: 2em; border: 1px solid #666; padding: 1em; width: 360px;">
+    <p id="msgList" style="padding: 0; margin: 0;"></p>
+</div>
 
-<script>
-    const connectSocketServer = async (url, options) => {
-        return new Promise((resolve, reject) => {
-            const socket = io(url, options = {});
+<div style="margin-left: 1em; margin-top: 2em;">
+    <input class="form-control" type="text" id="msg" name="msg" placeholder="Tipear mensaje" style="width: 360px;">
+</div>
 
-            socket.on('connect', () =>{
-                console.log(`Conectado servidor socket.io ${url}`);
-                resolve(socket);
-            });
-            
-            socket.on('connect_error', err => {
-                console.error('ERROR al conectar servidor socket.io', err);
-                reject(err);
-            });
+{{!-- <script src="/socket.io/socket.io.js"></script> --}}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.14.1/dist/sweetalert2.all.min.js"></script>
+<script type="module">
+    const url = ''; // vacío para localhost
+    const options = {};
+    const user = { nickName: '' };
+    // Se crean referencias a elementos del DOM (párrafo con lista de mensajes y campo input para nuevos mensajes)
+    const msgField = document.getElementById('msg');
+    const msgList = document.getElementById('msgList');
 
-            socket.on('welcome', data => {
-                console.log(data);
-            });
+    // Solicita nickname de la persona
+    const askName = async () => {
+        const result = await Swal.fire({
+            title: 'Coder Chat 70275',
+            input: 'text',
+            text: 'Bienvenido!, indicá tu nombre para el chat',
+            inputValidator: val => !val && 'Indicar nombre!',
+            allowOutsideClick: false
+        });
+
+        user.nickName = result.value || 'guest'; // invitado
+    }
+
+    // Abre mensaje tipo toast que se oculta automáticamente después de 3 segs
+    const notify = (text) => {
+        Swal.fire({
+            text: text,
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000
         });
     }
 
-    (async () => {
-        const socketClient = await connectSocketServer('');
-        // socketClient.emit('init_message', { node: 23, name: 'client_23', location: 'Rafaela, AR' });
-    })();
+    // Listener para el campo de mensajes. Cada vez que se presione enter,
+    // se revisa si contiene algo y se envía un emit new_own_msg al servidor
+    msgField.addEventListener('keyup', event => {
+        if (event.key === 'Enter' && msgField.value !== '') {
+            const data = { user: user.nickName, msg: msgField.value };
+            socketClient.emit('new_own_msg', data);
+            msgField.value = '';
+        }
+    });
+
+    // Conexión al SERVIDOR websockets
+    const socketClient = io(url, options);
+
+    // Se habilita un listener atento a la conexión
+    // Cuando este cliente logra conectar con el servidor, se ejecuta este callback
+    socketClient.on('connect', async () => {
+        console.log(`Conectado servidor socket.io ${url}`);
+        await askName();
+        // Se le envía el nicknae al servidor
+        socketClient.emit('new_user_data', { user: user.nickName });
+    });
+
+    // Suscripciones
+    // current_messages lo genera el servidor al conectarse el cliente, le envía
+    // la lista actual de mensajes en el chat
+    socketClient.on('current_messages', data => {
+        msgList.innerHTML = '';
+        data.forEach(msg => {
+            msgList.innerHTML += `<br /><strong>[${msg.user}</strong>] ${msg.msg}`;
+        });
+    });
+
+    // new_general_msg lo genera el servidor para TODOS cuando recibe de CUALQUIER
+    // cliente un nuevo mensaje
+    socketClient.on('new_general_msg', data => {
+        msgList.innerHTML += `<br /><strong>[${data.user}</strong>] ${data.msg}`;
+    });
+
+    // new_user lo genera el servidor cuando recibe datos de un usuario nuevo conectado
+    socketClient.on('new_user', data => {
+        notify(`${data.user} se ha conectado!`);
+    });
 </script>

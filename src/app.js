@@ -25,13 +25,21 @@ const httpServer = app.listen(config.PORT, () => {
 });
 
 const socketServer = new Server(httpServer);
+const messages = [];
 
 socketServer.on('connection', socket => {
-    console.log(`Nuevo cliente conectado con id ${socket.id}`);
-
-    socket.on('init_message', data => {
-        console.log(data);
+    // Suscripción al tópico new_user_data (que envía un cliente cuando se conecta)
+    socket.on('new_user_data', data => {
+        // Envía a ESE cliente la lista actual de mensajes
+        socket.emit('current_messages', messages);
+        // y a TODOS LOS DEMÁS los datos del nuevo usuario que acaba de conectarse
+        socket.broadcast.emit('new_user', data);
     });
 
-    socket.emit('welcome', `Bienvenido cliente, estás conectado con el id ${socket.id}`);
+    // Suscripción al tópico new_own_msg (que genera cualquier cliente al enviar un texto nuevo de chat)
+    socket.on('new_own_msg', data => {
+        messages.push(data);
+        // Reenvía mensaje a TODOS los clientes conectados, INCLUYENDO el que mandó el msj original
+        socketServer.emit('new_general_msg', data);
+    });
 });
