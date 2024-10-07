@@ -65,7 +65,7 @@
     socketClient.on('connect', async () => {
         console.log(`Conectado servidor socket.io ${url}`);
         await askName();
-        // Se le envía el nicknae al servidor
+        // Se le envía el nickname al servidor
         socketClient.emit('new_user_data', { user: user.nickName });
     });
 
