@@ -1,6 +1,6 @@
 import express from 'express';
 import handlebars from 'express-handlebars';
-import { Server } from 'socket.io';
+import initSocket from './sockets.js';
 
 import usersRouter from './routes/users.router.js';
 import viewsRouter from './routes/views.router.js';
@@ -9,37 +9,27 @@ import config from './config.js';
 
 const app = express();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.engine('handlebars', handlebars.engine());
-app.set('views', `${config.DIRNAME}/views`);
-app.set('view engine', 'handlebars');
-
-app.use('/views', viewsRouter);
-app.use('/api/users', usersRouter);
-app.use('/static', express.static(`${config.DIRNAME}/public`));
-
 const httpServer = app.listen(config.PORT, () => {
     console.log(`Server activo en puerto ${config.PORT}`);
-});
+    
+    /**
+     * Separamos la lógica de socket.io en archivo aparte (sockets.js),
+     * importamos y levantamos la instancia acá.
+     * 
+     * La línea de app.set() nos permite generar una referencia global al
+     * objeto socketServer para poder utilizarlo por ej en endpoints (realizar un emit)
+     */
+    const socketServer = initSocket(httpServer);
+    app.set('socketServer', socketServer);
 
-const socketServer = new Server(httpServer);
-const messages = [];
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
 
-socketServer.on('connection', socket => {
-    // Suscripción al tópico new_user_data (que envía un cliente cuando se conecta)
-    socket.on('new_user_data', data => {
-        // Envía a ESE cliente la lista actual de mensajes
-        socket.emit('current_messages', messages);
-        // y a TODOS LOS DEMÁS los datos del nuevo usuario que acaba de conectarse
-        socket.broadcast.emit('new_user', data);
-    });
+    app.engine('handlebars', handlebars.engine());
+    app.set('views', `${config.DIRNAME}/views`);
+    app.set('view engine', 'handlebars');
 
-    // Suscripción al tópico new_own_msg (que genera cualquier cliente al enviar un texto nuevo de chat)
-    socket.on('new_own_msg', data => {
-        messages.push(data);
-        // Reenvía mensaje a TODOS los clientes conectados, INCLUYENDO el que mandó el msj original
-        socketServer.emit('new_general_msg', data);
-    });
+    app.use('/views', viewsRouter);
+    app.use('/api/users', usersRouter);
+    app.use('/static', express.static(`${config.DIRNAME}/public`));
 });
